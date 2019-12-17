@@ -1,11 +1,10 @@
 # wenshushu （文叔叔）
 
-<center>Python 3.7</center>
-
-<center>多线程上传下载，秒传，使用体验与网页无差别。</center>
-
-![alt 预览](./src/view.png)
-
+<p align="center"> Python 3.7 </p>
+<p align="center"> 多线程上传下载，秒传，使用体验与网页无差别。 </p>
+<p align="center">
+<img src="./src/view.png" width="797">
+</p>
 ## 使用教程
 
 #### 1. 安装依赖
