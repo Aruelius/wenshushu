@@ -156,7 +156,7 @@ def upload(filePath):
                 "remark":"",
                 "isextension":False,
                 "pwd":"",
-                "expire":3,
+                "expire":2,
                 "recvs":[
                     "social",
                     "public"
@@ -304,7 +304,9 @@ if __name__ == "__main__":
         elif command == 'download':
             url = sys.argv[2]
             download(url)
-    except:
+    except IndexError:
         print('请输入正确命令\n',
             '上传:[python wss.py upload "file.exe"]\n',
             '下载:[python wss.py download "url"]')
+    except Exception as e:
+        print(f"上传失败：{e}")
