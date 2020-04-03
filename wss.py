@@ -1,7 +1,7 @@
 import hashlib
 import os
-import time
 import sys
+import time
 import traceback
 from threading import Thread
 
@@ -117,19 +117,15 @@ def upload(filePath):
         cm = hashlib.sha1(s.encode('utf-8')).hexdigest()
         return cm
 
-    def md5_file(block=None):
+    def calc_file_hash(type, block=None):
         read_size = 2097152 if ispart else None
         if not block:
             block = open(filePath,'rb').read(read_size)
-        md5_code = hashlib.md5(block).hexdigest()
-        return md5_code
-
-    def sha1_file(block=None):
-        read_size = 2097152 if ispart else None
-        if not block:
-            block = open(filePath,'rb').read(read_size)
-        sha1_code = hashlib.sha1(block).hexdigest()
-        return sha1_code
+        if type == "md5":
+            hash_code = hashlib.md5(block).hexdigest()
+        elif type == "SHA1":
+            hash_code = hashlib.sha1(block).hexdigest()
+        return hash_code
 
     def storage():
         r = s.post(
@@ -225,8 +221,8 @@ def upload(filePath):
 
     def fast():
         boxid, preid, taskid, upId = addsend()
-        cm1, cs1 = md5_file(), sha1_file()
-        cm = hashlib.sha1(cm1.encode('utf-8')).hexdigest()
+        cm1, cs1 = calc_file_hash("md5"), calc_file_hash("SHA1")
+        cm = sha1_str(cm1)
         name = filePath.split('/')[-1]
 
         payload = {
@@ -255,7 +251,7 @@ def upload(filePath):
             if can_fast and not ufile:
                 hash_codes = ''
                 for block, _ in read_file():
-                    hash_codes += md5_file(block)
+                    hash_codes += calc_file_hash("md5", block)
                 payload['hash']['cm'] = sha1_str(hash_codes)
             elif can_fast and ufile:
                 print(f'文件{name}可以被秒传！')
@@ -344,5 +340,4 @@ if __name__ == "__main__":
             '上传:[python wss.py upload "file.exe"]\n',
             '下载:[python wss.py download "url"]')
     except Exception as e:
-        traceback.print_exc()
         print(f"上传失败：{e}")
