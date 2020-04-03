@@ -1,8 +1,12 @@
-import requests
-import os
 import hashlib
-from threading import Thread
+import os
+import time
 import sys
+import traceback
+from threading import Thread
+
+import requests
+
 
 def login_anonymous():
     r = s.post(
@@ -166,31 +170,49 @@ def upload(filePath):
             }
         )
         rsp = r.json()
-        if rsp['code'] == 1021:
+        if rsp["code"] == 1021:
             print(f'操作太快啦！请{rsp["message"]}秒后重试')
             os._exit(0)
-        return rsp['data']['bid'], rsp['data']['ufileid'], rsp['data']['tid']
+        data = rsp["data"]
+        bid, ufileid, tid = data["bid"], data["ufileid"], data["tid"]
+        upId = get_up_id(bid, ufileid, tid, file_size)
+        return bid, ufileid, tid, upId
 
-    def psurl(fname, tid, file_size, partnu=None):
+    def get_up_id(bid: str, ufileid: str, tid: str, file_size: int):
+        r = s.post(
+            url="https://www.wenshushu.cn/ap/uploadv2/getupid",
+            json={
+                "preid": ufileid,
+                "boxid": bid,
+                "linkid": tid,
+                "utype":"sendcopy",
+                "originUpid":"",
+                "length": file_size,
+                "count":1
+            }
+        )
+        return r.json()["data"]["upId"]
+
+    def psurl(fname, upId, file_size, partnu=None):
         payload = {
             "ispart":ispart,
             "fname":fname,
             "fsize":file_size,
-            "tid":tid,
+            "upId": upId,
         }
         if ispart:
-            payload['partnu'] = partnu
+            payload["partnu"] = partnu
         r = s.post(
-            url = 'https://www.wenshushu.cn/ap/upload/psurl',
+            url = "https://www.wenshushu.cn/ap/uploadv2/psurl",
             json = payload
         )
         rsp = r.json()
-        url = rsp['data']['url']
+        url = rsp["data"]["url"]
         return url
 
-    def cpltsend(boxid, taskid, preid):
+    def copysend(boxid, taskid, preid):
         r = s.post(
-            url = 'https://www.wenshushu.cn/ap/task/cpltsend',
+            url = 'https://www.wenshushu.cn/ap/task/copysend',
             json = {
                 'bid': boxid,
                 'tid': taskid,
@@ -202,9 +224,8 @@ def upload(filePath):
         print(f"公共链接：{rsp['data']['public_url']}")
 
     def fast():
-        boxid, preid, taskid = addsend()
-        cm1 = md5_file()
-        cs1 = sha1_file()
+        boxid, preid, taskid, upId = addsend()
+        cm1, cs1 = md5_file(), sha1_file()
         cm = hashlib.sha1(cm1.encode('utf-8')).hexdigest()
         name = filePath.split('/')[-1]
 
@@ -218,18 +239,18 @@ def upload(filePath):
                 "boxid":boxid,
                 "preid":preid
             },
-            "taskid":taskid
+            "upId": upId
         }
 
         if not ispart:
             payload['hash']['cm'] = cm # 把md5用SHA1加密
         for _ in range(2):
             r = s.post(
-                url = 'https://www.wenshushu.cn/ap/upload/fast',
+                url = 'https://www.wenshushu.cn/ap/uploadv2/fast',
                 json = payload
             )
             rsp = r.json()
-            can_fast = rsp['data']['isCan']
+            can_fast = rsp["data"]["status"]
             ufile = rsp['data']['ufile']
             if can_fast and not ufile:
                 hash_codes = ''
@@ -238,28 +259,41 @@ def upload(filePath):
                 payload['hash']['cm'] = sha1_str(hash_codes)
             elif can_fast and ufile:
                 print(f'文件{name}可以被秒传！')
-                cpltsend(boxid, taskid, preid)
+                getprocess(upId)
+                copysend(boxid, taskid, preid)
                 os._exit(0)
 
-        return name, taskid, boxid, preid
+        return name, taskid, boxid, preid, upId
 
-    def complete(fname, tid, boxid, preid):
+    def getprocess(upId: str):
+        while True:
+            r = s.post(
+                url="https://www.wenshushu.cn/ap/ufile/getprocess",
+                json={
+                    "processId": upId
+                }
+            )
+            if r.json()["data"]["rst"] == "success":
+                return True
+            time.sleep(1)
+
+    def complete(fname, upId, tid, boxid, preid):
         s.post(
-            url = 'https://www.wenshushu.cn/ap/upload/complete',
+            url = "https://www.wenshushu.cn/ap/uploadv2/complete",
             json = {
                 "ispart":ispart,
-                "fname":fname,
-                "tid":tid,
+                "fname": fname,
+                "upId": upId,
                 "location":{
                     "boxid":boxid,
                     "preid":preid
                 }
             }
         )
-        cpltsend(boxid, tid, preid)
+        copysend(boxid, tid, preid)
 
     def file_put(url, block=open(filePath, 'rb').read()):
-        requests.put(url = url, data = block)
+        requests.put(url=url, data=block)
         if ispart:
             task.pop(0)
         
@@ -267,11 +301,11 @@ def upload(filePath):
         global task
         threads = []
         task = []
-        fname, tid, boxid, preid = fast()
+        fname, tid, boxid, preid, upId = fast()
         if ispart:
             print('文件正在被分块上传！')
             for block, partnu in read_file():
-                url  = psurl(fname, tid, len(block), partnu)
+                url  = psurl(fname, upId, len(block), partnu)
                 t = Thread(target=file_put,args=(url,block))
                 threads.append(t)
                 task.append(1)
@@ -287,10 +321,11 @@ def upload(filePath):
                 thread.join()
         else:
             print('文件被整块上传！')
-            url  = psurl(fname, tid, file_size)
+            url  = psurl(fname, upId, file_size)
             file_put(url)
 
-        complete(fname, tid, boxid, preid)
+        complete(fname, upId, tid, boxid, preid)
+        getprocess(upId)
     upload_main()
 
 if __name__ == "__main__":
@@ -309,4 +344,5 @@ if __name__ == "__main__":
             '上传:[python wss.py upload "file.exe"]\n',
             '下载:[python wss.py download "url"]')
     except Exception as e:
+        traceback.print_exc()
         print(f"上传失败：{e}")
