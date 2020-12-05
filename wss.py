@@ -254,7 +254,7 @@ def upload(filePath):
             json=payload
         )
         rsp = r.json()
-        url = rsp["data"]["url"]
+        url = rsp["data"]["url"]  # url expires in 600s (10 minutes)
         return url
 
     def copysend(boxid, taskid, preid):
@@ -339,36 +339,35 @@ def upload(filePath):
         )
         copysend(boxid, tid, preid)
 
-    def file_put(url, fn, offset=0, read_size=chunk_size):
+    def file_put(psurl_args, fn, offset=0, read_size=chunk_size):
         with open(fn, "rb") as fio:
             fio.seek(offset)
-            requests.put(url=url, data=fio.read(read_size))
+            requests.put(url=psurl(*psurl_args), data=fio.read(read_size))
 
     def upload_main():
         fname, tid, boxid, preid, upId = fast()
         if ispart:
             print('文件正在被分块上传！')
-            thread_pool = ThreadPoolExecutor(max_workers=4)  # or use os.cpu_count()
-            future_list = []
-            for i in range((file_size + chunk_size - 1)//chunk_size):
-                ul_size = chunk_size if chunk_size*(i+1) <= file_size \
-                    else file_size % chunk_size
-                url = psurl(fname, upId, ul_size, i+1)
-                future_list.append(thread_pool.submit(
-                    file_put, url, filePath, chunk_size*i, ul_size
-                ))
-            future_length = len(future_list)
-            count = 0
-            for _ in concurrent.futures.as_completed(future_list):
-                count += 1
-                sp = count / future_length * 100
-                print(f'分块进度:{int(sp)}%', end='\r')
-                if sp == 100:
-                    print('上传完成:100%')
+            with ThreadPoolExecutor(max_workers=4) as executor:  # or use os.cpu_count()
+                future_list = []
+                for i in range((file_size + chunk_size - 1)//chunk_size):
+                    ul_size = chunk_size if chunk_size*(i+1) <= file_size \
+                        else file_size % chunk_size
+                    future_list.append(executor.submit(
+                        file_put, [fname, upId, ul_size, i+1],
+                        filePath, chunk_size*i, ul_size
+                    ))
+                future_length = len(future_list)
+                count = 0
+                for _ in concurrent.futures.as_completed(future_list):
+                    count += 1
+                    sp = count / future_length * 100
+                    print(f'分块进度:{int(sp)}%', end='\r')
+                    if sp == 100:
+                        print('上传完成:100%')
         else:
             print('文件被整块上传！')
-            url = psurl(fname, upId, file_size)
-            file_put(url, filePath, 0, file_size)
+            file_put([fname, upId, file_size], filePath, 0, file_size)
             print('上传完成:100%')
 
         complete(fname, upId, tid, boxid, preid)
