@@ -106,15 +106,15 @@ def download(url):
 
 
 def upload(filePath):
+    chunk_size = 2097152
     file_size = os.path.getsize(filePath)
-    ispart = True if file_size > 2097152 else False
+    ispart = True if file_size > chunk_size else False
 
-    def read_file():
-        read_size = 2097152
+    def read_file(block_size=chunk_size):
         partnu = 0
         with open(filePath, "rb") as f:
             while True:
-                block = f.read(read_size)
+                block = f.read(block_size)
                 partnu += 1
                 if block:
                     yield block, partnu
@@ -126,7 +126,7 @@ def upload(filePath):
         return cm
 
     def calc_file_hash(hashtype, block=None):
-        read_size = 2097152 if ispart else None
+        read_size = chunk_size if ispart else None
         if not block:
             with open(filePath, 'rb') as f:
                 block = f.read(read_size)
@@ -339,18 +339,24 @@ def upload(filePath):
         )
         copysend(boxid, tid, preid)
 
-    def file_put(url, block=open(filePath, 'rb').read()):
-        requests.put(url=url, data=block)
+    def file_put(url, fn, offset=0, read_size=chunk_size):
+        with open(fn, "rb") as fio:
+            fio.seek(offset)
+            requests.put(url=url, data=fio.read(read_size))
 
     def upload_main():
         fname, tid, boxid, preid, upId = fast()
         if ispart:
             print('文件正在被分块上传！')
-            future_list = []
             thread_pool = ThreadPoolExecutor(max_workers=4)  # or use os.cpu_count()
-            for block, partnu in read_file():
-                url = psurl(fname, upId, len(block), partnu)
-                future_list.append(thread_pool.submit(file_put, url, block))
+            future_list = []
+            for i in range((file_size + chunk_size - 1)//chunk_size):
+                ul_size = chunk_size if chunk_size*(i+1) <= file_size \
+                    else file_size % chunk_size
+                url = psurl(fname, upId, ul_size, i+1)
+                future_list.append(thread_pool.submit(
+                    file_put, url, filePath, chunk_size*i, ul_size
+                ))
             future_length = len(future_list)
             count = 0
             for _ in concurrent.futures.as_completed(future_list):
@@ -362,7 +368,8 @@ def upload(filePath):
         else:
             print('文件被整块上传！')
             url = psurl(fname, upId, file_size)
-            file_put(url)
+            file_put(url, filePath, 0, file_size)
+            print('上传完成:100%')
 
         complete(fname, upId, tid, boxid, preid)
         getprocess(upId)
