@@ -8,7 +8,7 @@
 #### 1. 安装依赖
 
 ```shell
-pip install requests
+pip install requests base58 pycryptodomex
 ```
 
 #### 2. 上传
