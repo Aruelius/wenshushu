@@ -78,11 +78,17 @@ def download(url):
 
     def down_handle(url, filename):
         print('开始下载!', end='\r')
-        r = s.get(url)
+        r = s.get(url, stream=True)
+        dl_size = int(r.headers.get('Content-Length'))
+        block_size = 2097152
+        dl_count = 0
         with open(filename, 'wb') as f:
-            f.write(r.content)
-            f.close()
-        print('下载完成!')
+            r.raise_for_status()
+            for chunk in r.iter_content(chunk_size=block_size):
+                f.write(chunk)
+                dl_count += len(chunk)
+                print(f'下载进度:{int(dl_count/dl_size*100)}%', end='\r')
+            print('下载完成:100%')
 
     def sign(bid, fid, filename):
         r = s.post(
@@ -93,6 +99,10 @@ def download(url):
                 'ufileid': fid
             }
         )
+        if r.json()['data']['url'] == "" and \
+                r.json()['data']['ttNeed'] != 0:
+            print("对方的分享流量不足")
+            sys.exit(0)
         url = r.json()['data']['url']
         down_handle(url, filename)
 
@@ -393,4 +403,4 @@ if __name__ == "__main__":
               '上传:[python wss.py upload "file.exe"]\n',
               '下载:[python wss.py download "url"]')
     except Exception as e:
-        print(f"上传失败：{e}")
+        print(f"操作失败：{e}")
