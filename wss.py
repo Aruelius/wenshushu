@@ -202,10 +202,12 @@ def upload(filePath):
             "remark": "",
             "isextension": False,
             "notSaveTo": False,
+            "notDownload": False,
+            "notPreview": False,
             "downPreCountLimit": 0,
             "trafficStatus": 0,
             "pwd": "",
-            "expire": "2",
+            "expire": "1",
             "recvs": [
                 "social",
                 "public"
@@ -392,10 +394,10 @@ if __name__ == "__main__":
     s.headers['Accept-Language'] = "en-US, en;q=0.9"  # NOTE: require header, otherwise return {"code":-1, ...}
     try:
         command = sys.argv[1]
-        if command == 'upload':
+        if command.lower() in ['upload', 'u']:
             file = sys.argv[2]
             upload(file)
-        elif command == 'download':
+        elif command.lower() in ['download', 'd']:
             url = sys.argv[2]
             download(url)
     except IndexError:
@@ -403,4 +405,5 @@ if __name__ == "__main__":
               '上传:[python wss.py upload "file.exe"]\n',
               '下载:[python wss.py download "url"]')
     except Exception as e:
+        traceback.print_exc()
         print(f"操作失败：{e}")
