@@ -1,14 +1,15 @@
+import base64
+import concurrent.futures
 import hashlib
+import json
 import os
 import sys
 import time
 import traceback
-import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
-import json
-import requests
+
 import base58
-import base64
+import requests
 from Cryptodome.Cipher import DES
 from Cryptodome.Util import Padding
 
@@ -233,6 +234,7 @@ def upload(filePath):
             print(f'操作太快啦！请{rsp["message"]}秒后重试')
             sys.exit(0)
         data = rsp["data"]
+        assert data, "需要滑动验证码"
         bid, ufileid, tid = data["bid"], data["ufileid"], data["tid"]
         upId = get_up_id(bid, ufileid, tid, file_size)
         return bid, ufileid, tid, upId
@@ -406,4 +408,3 @@ if __name__ == "__main__":
               '下载:[python wss.py download "url"]')
     except Exception as e:
         traceback.print_exc()
-        print(f"操作失败：{e}")
