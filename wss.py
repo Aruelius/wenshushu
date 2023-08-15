@@ -72,10 +72,12 @@ def download(url):
             }
         )
         rsp = r.json()
-        filename = rsp['data']['fileList'][0]['fname']
-        fid = rsp['data']['fileList'][0]['fid']
-        print(f'文件名:{filename}')
-        sign(bid, fid, filename)
+        filelist = rsp['data']['fileList']
+        for i, file_info in enumerate(filelist):
+            filename = file_info['fname']
+            fid = file_info['fid']
+            print(f'[{i+1}/{len(filelist)}] 文件名:{filename}')
+            sign(bid, fid, filename)
 
     def down_handle(url, filename):
         print('开始下载!', end='\r')
